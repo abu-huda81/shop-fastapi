@@ -1,0 +1,65 @@
+# npm install bootstrap
+# npm install jwt-decode
+# npm install react-bootstrap
+# npm install axios
+# npm install react-router-dom
+# npx create-react-app my-app
+
+
+from typing import List
+from fastapi import Depends, HTTPException, APIRouter
+from sqlalchemy.orm import Session
+from database.connection import get_db
+from fastapi.security import OAuth2PasswordBearer
+from repository import order_crud
+from schemas import order_schema
+from security.user_security import verify_token
+
+
+router = APIRouter(prefix="/order")
+
+
+@router.post("/orders/", response_model=order_schema.Order, tags=["order"])
+def create_order(
+    order: order_schema.OrderCreate,
+    user_id: str = Depends(verify_token),
+    db: Session = Depends(get_db),
+):
+    try:
+        return order_crud.create_order(db=db, user_id=user_id, items=order.items)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/orders/", response_model=List[order_schema.Order], tags=["order"])
+def get_orders_by_user(
+    user_id: str = Depends(
+        verify_token
+    ),  # Ensure the token is verified and user_id is extracted
+    db: Session = Depends(get_db),
+):
+    try:
+        orders = order_crud.get_all_orders_by_id(db, user_id)
+        return orders
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Get an order by ID
+@router.get("/order/{order_id}", response_model=order_schema.Order, tags=["order"])
+def read_order(order_id: int, db: Session = Depends(get_db)):
+    order = order_crud.get_order_by_id(db=db, order_id=order_id)
+    if order is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return order
+
+
+@router.get("/users/{user_id}/order-details/")
+def get_user_order_details(
+    user_id: str = Depends(verify_token), db: Session = Depends(get_db)
+):
+    try:
+        orders = order_crud.get_order_details(db, user_id)
+        return orders
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
